@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useBracket, useShareQuery, useStandings, useStore } from '../state/store';
 import { ShareCard, type ShareVariant } from './export/ShareCard';
 import { exportPng } from './export/exportPng';
+import { NFL } from '../routes';
 
 const EXPORT_LABEL: Record<ShareVariant, string> = {
   team: 'Export card',
@@ -74,7 +75,7 @@ export function ActionBar({ variant }: { variant: ShareVariant }) {
             <Icon d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" />
             {busy ? 'Rendering…' : EXPORT_LABEL[variant]}
           </button>
-          <Link to={{ pathname: onBracket ? '/predict' : '/bracket', search: query }} className={`${btn} bg-emerald-400 text-gray-950 hover:bg-emerald-300`}>
+          <Link to={{ pathname: onBracket ? NFL.predict : NFL.bracket, search: query }} className={`${btn} bg-emerald-400 text-gray-950 hover:bg-emerald-300`}>
             {onBracket ? '← Games' : 'Bracket →'}
           </Link>
         </div>

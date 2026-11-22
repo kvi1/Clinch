@@ -16,11 +16,11 @@ npm run fetch-schedule # refresh public/data/nfl-2026.json from ESPN
 
 ## Pages
 
-- `/` — landing page with how-it-works and a team/division quick start.
-- `/predict` — pick games in **One team** mode (team summary + exportable team card) or **Whole division** mode.
-- `/bracket` — playoff bracket; tabbed with sideways-scrolling rounds below 1280px, AFC → Super Bowl ← NFC above.
+- `/nfl` — NFL home: live score ticker, current playoff picture, this week's slate, team/division quick start.
+- `/nfl/predict` — pick games in **One team** mode (team summary + exportable team card) or **Whole division** mode.
+- `/nfl/bracket` — playoff bracket; tabbed with sideways-scrolling rounds below 1280px, AFC → Super Bowl ← NFC above.
 
-Old share links (`/?s=…`) forward to `/predict`.
+`/` redirects to `/nfl` (future sport picker). Older paths (`/predict`, `/bracket`, `/?s=…`) forward to their `/nfl` equivalents with the scenario intact.
 
 ## Layout
 
@@ -30,11 +30,12 @@ Old share links (`/?s=…`) forward to `/predict`.
 - `src/state/` — Zustand store, lz-string URL encoding (`?s=`).
 - `scripts/fetch-schedule.ts` — ESPN scoreboard → season JSON, validated (272 games, 17 per team).
 
-## Deploy (Cloudflare Pages)
+## Deploy (Vercel)
 
-Connect the repo with build command `npm run build` and output directory `dist`. `public/_redirects` provides the SPA
-fallback for `/bracket`. `.github/workflows/update-schedule.yml` refreshes the schedule on a cron and commits only when
-the data changed, which triggers a Pages redeploy.
+Import the GitHub repo at vercel.com/new — `vercel.json` sets the Vite build (`npm run build` → `dist`), the SPA
+rewrite so deep links like `/bracket?s=…` load the app, and caching (hashed assets cached forever, schedule JSON
+always revalidated). `.github/workflows/update-schedule.yml` refreshes the schedule on a cron and commits only when the
+data changed, which triggers a Vercel redeploy.
 
 ## Tiebreaker notes
 

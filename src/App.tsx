@@ -4,13 +4,15 @@ import { useShareQuery, useStore } from './state/store';
 import { Landing } from './pages/Landing';
 import { Predict } from './pages/Predict';
 import { Bracket } from './pages/Bracket';
+import { NFL } from './routes';
+import logo from './assets/logo.png';
 
 /** Mirrors the scenario into ?s= so the address bar is always a shareable link (not on the landing page). */
 function UrlSync() {
   const query = useShareQuery();
   const { pathname } = useLocation();
   useEffect(() => {
-    if (!query || pathname === '/') return;
+    if (!query || pathname === NFL.home) return;
     const id = setTimeout(() => {
       const url = `${window.location.pathname}${query}`;
       if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, '', url);
@@ -27,23 +29,34 @@ function Header() {
   return (
     <header className="sticky top-0 z-30 -mx-4 mb-5 border-b border-white/[0.06] bg-[#070a10]/80 px-4 py-3 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-        <Link to="/" className="flex items-center gap-2 text-xl font-black tracking-tight">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 text-sm text-gray-950">C</span>
-          CLINCH
-        </Link>
+        <div className="flex items-center gap-2.5">
+          <Link to={NFL.home} className="flex items-center gap-2" aria-label="Clinch home">
+            <img src={logo} alt="" width={32} height={32} className="h-8 w-8 rounded-lg" />
+            <span className="-skew-x-12 bg-emerald-400 px-2 py-0.5">
+              <span className="block skew-x-12 font-display text-2xl leading-none font-black text-gray-950 italic">CLINCH</span>
+            </span>
+          </Link>
+          <span className="rounded border border-white/15 px-1.5 py-0.5 font-display text-xs font-bold tracking-widest text-gray-300">NFL</span>
+        </div>
         <nav className="flex items-center gap-1">
-          <NavLink to={{ pathname: '/predict', search: query }} className={tab}>Predict</NavLink>
-          <NavLink to={{ pathname: '/bracket', search: query }} className={tab}>Bracket</NavLink>
+          <NavLink to={{ pathname: NFL.predict, search: query }} className={tab}>Predict</NavLink>
+          <NavLink to={{ pathname: NFL.bracket, search: query }} className={tab}>Bracket</NavLink>
         </nav>
       </div>
     </header>
   );
 }
 
-/** Old share links pointed at "/?s=…" — forward them to the predictor. */
+/** A link carrying a scenario (?s=…) to a landing page opens the predictor; otherwise show the NFL home. */
 function LandingOrRedirect() {
   const { search } = useLocation();
-  return new URLSearchParams(search).has('s') ? <Navigate to={`/predict${search}`} replace /> : <Landing />;
+  return new URLSearchParams(search).has('s') ? <Navigate to={`${NFL.predict}${search}`} replace /> : <Landing />;
+}
+
+/** Redirect that keeps the query string (so shared scenarios survive). */
+function Forward({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={`${to}${search}`} replace />;
 }
 
 export default function App() {
@@ -70,10 +83,15 @@ export default function App() {
             <>
               <UrlSync />
               <Routes>
-                <Route path="/" element={<LandingOrRedirect />} />
-                <Route path="/predict" element={<Predict />} />
-                <Route path="/bracket" element={<Bracket />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
+                {/* "/" becomes a sport picker once there's more than one league. */}
+                <Route path="/" element={<Forward to={NFL.home} />} />
+                <Route path={NFL.home} element={<LandingOrRedirect />} />
+                <Route path={NFL.predict} element={<Predict />} />
+                <Route path={NFL.bracket} element={<Bracket />} />
+                {/* Pre-/nfl paths. */}
+                <Route path="/predict" element={<Forward to={NFL.predict} />} />
+                <Route path="/bracket" element={<Forward to={NFL.bracket} />} />
+                <Route path="*" element={<Navigate to={NFL.home} replace />} />
               </Routes>
             </>
           )}
