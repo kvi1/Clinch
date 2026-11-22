@@ -1,0 +1,38 @@
+name: Update schedule
+
+on:
+  schedule:
+    # Every 30 min across NFL game windows (UTC: Thu night → Tue morning), daily otherwise.
+    - cron: '*/30 * * * 0,1,2,5'
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-schedule
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run fetch-schedule
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- public/data; then
+            echo "No schedule changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data
+          git commit -m "Update NFL schedule data"
+          git push
