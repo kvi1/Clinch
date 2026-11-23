@@ -6,6 +6,7 @@ import type { BracketResult } from '../../engine/bracket';
 import { selectedTeamIds, selectionDivisionKey, selectionLabel } from '../../state/selection';
 import { TeamBadge } from '../TeamBadge';
 import { Trophy } from '../Trophy';
+import logo from '../../assets/logo-256.png';
 import { fmtRecord } from '../../lib/format';
 import { RESULT_STYLE, teamSchedule } from '../../lib/teamSchedule';
 
@@ -45,9 +46,11 @@ function Header({ eyebrow, title, season }: { eyebrow: string; title: string; se
 
 function Wordmark() {
   return (
-    <div className="flex shrink-0 items-center gap-3 text-3xl font-black tracking-tight text-white/60">
-      <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 text-2xl text-gray-950">C</span>
-      CLINCH
+    <div className="flex shrink-0 items-center gap-3">
+      <img src={logo} alt="" width={64} height={64} className="h-16 w-16 rounded-2xl" />
+      <span className="-skew-x-12 bg-emerald-400 px-3 py-1">
+        <span className="block skew-x-12 font-display text-4xl leading-none font-black text-gray-950 italic">CLINCH</span>
+      </span>
     </div>
   );
 }

@@ -97,7 +97,8 @@ export default function App() {
           )}
         </main>
         <footer className="mx-auto mt-14 max-w-7xl text-center text-[11px] text-gray-600">
-          Unofficial fan tool · not affiliated with the NFL · team names and colors used for identification only
+          Unofficial fan tool · not affiliated with the NFL · team names and colors used for identification only.
+          Made by Kartik
           {season && <> · data updated {new Date(season.updatedAt).toLocaleString()}</>}
         </footer>
       </div>
