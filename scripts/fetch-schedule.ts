@@ -50,6 +50,19 @@ export function mapEvent(ev: EspnEvent, season: number, week: number): Game {
   return game;
 }
 
+/**
+ * ESPN intermittently omits odds. For games still to be played, keep the last known spread
+ * instead of dropping it (mutates `next`). Finals never carry a spread.
+ */
+export function carryForwardSpreads(prev: Game[], next: Game[]): void {
+  const before = new Map(prev.map((g) => [g.id, g.vegasSpread]));
+  for (const g of next) {
+    if (g.isFinal || g.vegasSpread != null) continue;
+    const old = before.get(g.id);
+    if (old != null) g.vegasSpread = old;
+  }
+}
+
 export function validate(games: Game[]): string[] {
   const errors: string[] = [];
   if (games.length !== 272) errors.push(`expected 272 games, got ${games.length}`);
@@ -106,6 +119,7 @@ async function main() {
   // Keep the file byte-identical when nothing changed, so the scheduled job only commits real updates.
   if (existsSync(out)) {
     const prev = JSON.parse(readFileSync(out, 'utf8')) as SeasonData;
+    carryForwardSpreads(prev.games, games);
     if (JSON.stringify(prev.games) === JSON.stringify(games)) {
       console.log('No changes.');
       return;

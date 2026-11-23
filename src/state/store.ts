@@ -3,6 +3,7 @@ import type { BracketPicks, Game, GameOutcome, Outcomes, SeasonData, Selection }
 import { computeStandings, type StandingsResult } from '../engine/standings';
 import { buildBracket, type BracketResult } from '../engine/bracket';
 import { DEFAULT_SELECTION, decodeState, encodeState } from './urlState';
+import { MAX_NAME_LENGTH } from '../lib/format';
 
 interface AppState {
   season: SeasonData | null;
@@ -10,6 +11,9 @@ interface AppState {
   outcomes: Outcomes;
   selection: Selection;
   bracketPicks: BracketPicks;
+  /** Name shown on exported images. Per-device (localStorage), never put in share links. */
+  displayName: string;
+  setDisplayName: (name: string) => void;
   load: () => Promise<void>;
   setOutcome: (gameId: string, outcome: GameOutcome | null) => void;
   setOutcomes: (updates: Outcomes) => void;
@@ -20,6 +24,15 @@ interface AppState {
 }
 
 const SEASON_URL = '/data/nfl-2026.json';
+const NAME_KEY = 'clinch.displayName';
+
+function readName(): string {
+  try {
+    return localStorage.getItem(NAME_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
 
 /* Memoized derivations: recomputed only when games or outcomes change. */
 let standingsCache: { games: Game[]; outcomes: Outcomes; result: StandingsResult } | null = null;
@@ -48,6 +61,18 @@ export const useStore = create<AppState>((set, get) => ({
   outcomes: {},
   selection: DEFAULT_SELECTION,
   bracketPicks: {},
+  displayName: readName(),
+
+  setDisplayName: (name) => {
+    const clean = name.slice(0, MAX_NAME_LENGTH);
+    set({ displayName: clean });
+    try {
+      if (clean.trim()) localStorage.setItem(NAME_KEY, clean.trim());
+      else localStorage.removeItem(NAME_KEY);
+    } catch {
+      /* storage unavailable (private mode) — name just won't persist */
+    }
+  },
 
   load: async () => {
     try {

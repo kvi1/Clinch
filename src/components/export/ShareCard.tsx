@@ -7,7 +7,7 @@ import { selectedTeamIds, selectionDivisionKey, selectionLabel } from '../../sta
 import { TeamBadge } from '../TeamBadge';
 import { Trophy } from '../Trophy';
 import logo from '../../assets/logo-256.png';
-import { fmtRecord } from '../../lib/format';
+import { fmtRecord, ownerLabel } from '../../lib/format';
 import { RESULT_STYLE, teamSchedule } from '../../lib/teamSchedule';
 
 export type ShareVariant = 'team' | 'standings' | 'bracket';
@@ -20,6 +20,8 @@ interface Props {
   season: number;
   games: Game[];
   outcomes: Outcomes;
+  /** Shown as "<Name>'s 2026 projection"; blank → "My". */
+  name?: string;
 }
 
 const FONT = '"Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
@@ -32,11 +34,11 @@ function seedStatus(seed: number, conference: Conference, division: string) {
   return `Out of the playoffs`;
 }
 
-function Header({ eyebrow, title, season }: { eyebrow: string; title: string; season: number }) {
+function Header({ owner, eyebrow, title, season }: { owner: string; eyebrow: string; title: string; season: number }) {
   return (
     <div className="flex shrink-0 items-start justify-between gap-8">
       <div className="min-w-0 flex-1">
-        <div className="text-2xl font-bold tracking-[0.25em] whitespace-nowrap text-emerald-300 uppercase">My {season} {eyebrow}</div>
+        <div className="text-2xl leading-snug font-bold tracking-[0.2em] break-words text-emerald-300 uppercase">{owner} {season} {eyebrow}</div>
         <div className={`mt-3 leading-[1.05] font-black tracking-tight ${title.length > 16 ? 'text-6xl' : 'text-7xl'}`}>{title}</div>
       </div>
       <Wordmark />
@@ -60,7 +62,7 @@ function Footer() {
 }
 
 /** Single-team card: big projected record + all 17 games. */
-function TeamCard({ teamId, standings, season, games, outcomes }: { teamId: string; standings: StandingsResult; season: number; games: Game[]; outcomes: Outcomes }) {
+function TeamCard({ owner, teamId, standings, season, games, outcomes }: { owner: string; teamId: string; standings: StandingsResult; season: number; games: Game[]; outcomes: Outcomes }) {
   const team = TEAM_BY_ID[teamId];
   const r = standings.byTeam[teamId];
   const schedule = teamSchedule(games, outcomes, teamId);
@@ -70,8 +72,8 @@ function TeamCard({ teamId, standings, season, games, outcomes }: { teamId: stri
 
   return (
     <div className="flex h-full flex-col p-16" style={{ background: `radial-gradient(1000px 700px at 85% -10%, ${team.primaryColor}, transparent 70%), linear-gradient(160deg, #0b1220 0%, #070a10 70%)` }}>
-      <div className="flex items-start justify-between">
-        <div className="text-2xl font-bold tracking-[0.25em] whitespace-nowrap text-white/80 uppercase">My {season} projection</div>
+      <div className="flex items-start justify-between gap-8">
+        <div className="min-w-0 flex-1 text-2xl leading-snug font-bold tracking-[0.2em] break-words text-white/80 uppercase">{owner} {season} projection</div>
         <Wordmark />
       </div>
       <div className="mt-8 flex items-center gap-8">
@@ -118,7 +120,7 @@ function TeamCard({ teamId, standings, season, games, outcomes }: { teamId: stri
   );
 }
 
-function StandingsCard({ selection, standings, season }: { selection: Selection; standings: StandingsResult; season: number }) {
+function StandingsCard({ owner, selection, standings, season }: { owner: string; selection: Selection; standings: StandingsResult; season: number }) {
   const highlight = selectedTeamIds(selection);
   const divIds = standings.divisions[selectionDivisionKey(selection)];
   const seedColumn = (c: Conference) => (
@@ -139,7 +141,7 @@ function StandingsCard({ selection, standings, season }: { selection: Selection;
   );
   return (
     <div className="flex h-full flex-col p-14" style={{ background: BG }}>
-      <Header eyebrow="projection" title={selectionLabel(selection)} season={season} />
+      <Header owner={owner} eyebrow="projection" title={selectionLabel(selection)} season={season} />
       <div className="mt-10 rounded-3xl bg-white/[0.06] p-6 ring-1 ring-white/10">
         {divIds.map((id) => {
           const r = standings.byTeam[id];
@@ -182,14 +184,14 @@ function MatchupBox({ m, seedOf }: { m: PlayoffMatchup; seedOf: (id?: string) =>
   );
 }
 
-function BracketCard({ standings, bracket, season }: { standings: StandingsResult; bracket: BracketResult; season: number }) {
+function BracketCard({ owner, standings, bracket, season }: { owner: string; standings: StandingsResult; bracket: BracketResult; season: number }) {
   const seedOf = (id?: string) => (id ? standings.byTeam[id].conferenceSeed : undefined);
   const rounds = [['WC', 'Wild Card'], ['DIV', 'Divisional'], ['CONF', 'Championship']] as const;
   const sb = bracket.byId.SB;
   const champ = bracket.champion ? TEAM_BY_ID[bracket.champion] : undefined;
   return (
     <div className="flex h-full flex-col p-14" style={{ background: BG }}>
-      <Header eyebrow="playoff bracket" title={champ ? `${champ.name} win it all` : 'Playoff bracket'} season={season} />
+      <Header owner={owner} eyebrow="playoff bracket" title={champ ? `${champ.name} win it all` : 'Playoff bracket'} season={season} />
       <div className="mt-8 flex shrink-0 gap-8">
         {(['AFC', 'NFC'] as const).map((c) => (
           <div key={c} className="flex-1">
@@ -236,15 +238,16 @@ function BracketCard({ standings, bracket, season }: { standings: StandingsResul
 
 /** Fixed 1080×1350 (4:5) social graphic, rendered off-screen and captured with html-to-image. */
 export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(props, ref) {
-  const { variant, selection, standings, bracket, season, games, outcomes } = props;
+  const { variant, selection, standings, bracket, season, games, outcomes, name } = props;
+  const owner = ownerLabel(name);
   return (
     <div ref={ref} style={{ width: 1080, height: 1350, fontFamily: FONT }} className="overflow-hidden text-white">
       {variant === 'team' && selection.kind === 'team' ? (
-        <TeamCard teamId={selection.teamId} standings={standings} season={season} games={games} outcomes={outcomes} />
+        <TeamCard owner={owner} teamId={selection.teamId} standings={standings} season={season} games={games} outcomes={outcomes} />
       ) : variant === 'bracket' ? (
-        <BracketCard standings={standings} bracket={bracket} season={season} />
+        <BracketCard owner={owner} standings={standings} bracket={bracket} season={season} />
       ) : (
-        <StandingsCard selection={selection} standings={standings} season={season} />
+        <StandingsCard owner={owner} selection={selection} standings={standings} season={season} />
       )}
     </div>
   );

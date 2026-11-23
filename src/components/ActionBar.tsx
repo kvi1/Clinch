@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useBracket, useShareQuery, useStandings, useStore } from '../state/store';
 import { ShareCard, type ShareVariant } from './export/ShareCard';
 import { exportPng } from './export/exportPng';
+import { ExportDialog } from './export/ExportDialog';
 import { NFL } from '../routes';
 
 const EXPORT_LABEL: Record<ShareVariant, string> = {
@@ -11,11 +12,18 @@ const EXPORT_LABEL: Record<ShareVariant, string> = {
   bracket: 'Export bracket',
 };
 
+const DIALOG_TITLE: Record<ShareVariant, string> = {
+  team: 'Export team card',
+  standings: 'Export standings',
+  bracket: 'Export bracket',
+};
+
 /** Floating bottom bar: copy share link, export PNG, switch page. */
 export function ActionBar({ variant }: { variant: ShareVariant }) {
   const season = useStore((s) => s.season)!;
   const selection = useStore((s) => s.selection);
   const outcomes = useStore((s) => s.outcomes);
+  const displayName = useStore((s) => s.displayName);
   const standings = useStandings()!;
   const bracket = useBracket()!;
   const query = useShareQuery();
@@ -23,6 +31,8 @@ export function ActionBar({ variant }: { variant: ShareVariant }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const closeDialog = useCallback(() => setDialogOpen(false), []);
 
   const flash = (msg: string) => {
     setToast(msg);
@@ -45,6 +55,7 @@ export function ActionBar({ variant }: { variant: ShareVariant }) {
     try {
       const name = variant === 'team' && selection.kind === 'team' ? `clinch-${selection.teamId.toLowerCase()}` : `clinch-${variant}`;
       await exportPng(cardRef.current, `${name}.png`);
+      setDialogOpen(false);
     } catch (err) {
       flash(`Export failed: ${(err as Error).message}`);
     } finally {
@@ -52,14 +63,18 @@ export function ActionBar({ variant }: { variant: ShareVariant }) {
     }
   };
 
+  const cardProps = {
+    variant, selection, standings, bracket, season: season.season, games: season.games, outcomes, name: displayName,
+  };
   const btn = 'flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-semibold whitespace-nowrap transition-colors';
   const onBracket = variant === 'bracket';
   return (
     <>
       <div aria-hidden className="pointer-events-none fixed top-0 -left-[99999px]">
-        <ShareCard ref={cardRef} variant={variant} selection={selection} standings={standings} bracket={bracket}
-          season={season.season} games={season.games} outcomes={outcomes} />
+        <ShareCard ref={cardRef} {...cardProps} />
       </div>
+      <ExportDialog open={dialogOpen} busy={busy} title={DIALOG_TITLE[variant]} onClose={closeDialog} onExport={doExport}
+        preview={<ShareCard {...cardProps} />} />
       {toast && (
         <div role="status" className="fixed inset-x-0 bottom-24 z-40 mx-auto w-fit rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-xl">
           {toast}
@@ -71,7 +86,7 @@ export function ActionBar({ variant }: { variant: ShareVariant }) {
             <Icon d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
             Share link
           </button>
-          <button type="button" onClick={doExport} disabled={busy} className={`${btn} text-gray-100 hover:bg-white/10 disabled:opacity-50`}>
+          <button type="button" onClick={() => setDialogOpen(true)} disabled={busy} className={`${btn} text-gray-100 hover:bg-white/10 disabled:opacity-50`}>
             <Icon d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" />
             {busy ? 'Rendering…' : EXPORT_LABEL[variant]}
           </button>

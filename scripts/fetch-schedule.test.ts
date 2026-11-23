@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapEvent, validate } from './fetch-schedule';
+import { carryForwardSpreads, mapEvent, validate } from './fetch-schedule';
 import season from '../src/engine/__fixtures__/nfl-2024.json';
 import type { SeasonData } from '../src/types/nfl';
 
@@ -37,5 +37,20 @@ describe('fetch-schedule mapping', () => {
     const games = (season as SeasonData).games;
     expect(validate(games)).toEqual([]);
     expect(validate(games.slice(1)).length).toBeGreaterThan(0);
+  });
+
+  it('keeps the last known spread when ESPN drops odds, but not for finals', () => {
+    const prev = [
+      mapEvent(event(false, 'DAL', 'PHI', '0', '0', -8.5), 2026, 12),
+      mapEvent(event(false, 'KC', 'BUF', '0', '0', -3), 2026, 12),
+      mapEvent(event(false, 'NYG', 'WSH', '0', '0', 2), 2026, 12),
+    ];
+    const next = [
+      mapEvent(event(false, 'DAL', 'PHI', '0', '0'), 2026, 12), // odds missing → carry -8.5
+      mapEvent(event(false, 'KC', 'BUF', '0', '0', -2.5), 2026, 12), // line moved → keep new
+      mapEvent(event(true, 'NYG', 'WSH', '20', '17'), 2026, 12), // final → no spread
+    ];
+    carryForwardSpreads(prev, next);
+    expect(next.map((g) => g.vegasSpread)).toEqual([-8.5, -2.5, undefined]);
   });
 });
