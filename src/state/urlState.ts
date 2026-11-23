@@ -21,13 +21,14 @@ const FROM_CHAR: Record<string, GameOutcome> = { h: 'HOME_WIN', a: 'AWAY_WIN', t
 const sortedIds = (games: Game[]) => games.map((g) => g.id).sort();
 
 export const selectionToString = (s: Selection) =>
-  s.kind === 'team' ? `t:${s.teamId}` : `d:${s.conference}:${s.division}`;
+  s.kind === 'team' ? `t:${s.teamId}` : s.kind === 'division' ? `d:${s.conference}:${s.division}` : `w:${s.week}`;
 
 export function selectionFromString(str: string): Selection | null {
   const [kind, a, b] = str.split(':');
   if (kind === 't' && a) return { kind: 'team', teamId: a };
   if (kind === 'd' && (a === 'AFC' || a === 'NFC') && ['East', 'North', 'South', 'West'].includes(b))
     return { kind: 'division', conference: a as Conference, division: b as DivisionName };
+  if (kind === 'w' && /^\d+$/.test(a) && Number(a) >= 1 && Number(a) <= 18) return { kind: 'week', week: Number(a) };
   return null;
 }
 

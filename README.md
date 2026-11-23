@@ -1,5 +1,7 @@
 # Clinch
 
+Live at **https://clinchapp.io**
+
 Mobile-first NFL playoff scenario builder. Pick the remaining games for a team or division, watch standings and
 seeds update with the full NFL tiebreaker procedure, predict the bracket, share via URL, export a PNG.
 100% client-side; see [SPEC.md](SPEC.md).

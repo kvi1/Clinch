@@ -9,8 +9,9 @@ import { Trophy } from '../Trophy';
 import logo from '../../assets/logo-256.png';
 import { fmtRecord, ownerLabel } from '../../lib/format';
 import { RESULT_STYLE, teamSchedule } from '../../lib/teamSchedule';
+import { gamesInWeek, weekDateRange } from '../../lib/season';
 
-export type ShareVariant = 'team' | 'standings' | 'bracket';
+export type ShareVariant = 'team' | 'standings' | 'bracket' | 'week';
 
 interface Props {
   variant: ShareVariant;
@@ -58,7 +59,14 @@ function Wordmark() {
 }
 
 function Footer() {
-  return <div className="mt-auto pt-6 text-center text-xl text-white/40">Make your own scenario at clinch · not affiliated with the NFL</div>;
+  return (
+    <div className="mt-auto flex shrink-0 items-end justify-between pt-6">
+      <div className="text-2xl text-white/60">
+        Make yours at <span className="font-display text-3xl font-black tracking-wide text-emerald-300 italic">CLINCHAPP.IO</span>
+      </div>
+      <div className="text-base text-white/30">Not affiliated with the NFL</div>
+    </div>
+  );
 }
 
 /** Single-team card: big projected record + all 17 games. */
@@ -122,7 +130,8 @@ function TeamCard({ owner, teamId, standings, season, games, outcomes }: { owner
 
 function StandingsCard({ owner, selection, standings, season }: { owner: string; selection: Selection; standings: StandingsResult; season: number }) {
   const highlight = selectedTeamIds(selection);
-  const divIds = standings.divisions[selectionDivisionKey(selection)];
+  // Only rendered for team/division selections, which always have a division.
+  const divIds = standings.divisions[selectionDivisionKey(selection)!];
   const seedColumn = (c: Conference) => (
     <div className="flex-1">
       <div className="mb-3 text-2xl font-bold tracking-widest text-white/50">{c}</div>
@@ -159,6 +168,64 @@ function StandingsCard({ owner, selection, standings, season }: { owner: string;
         })}
       </div>
       <div className="mt-10 flex gap-8">{seedColumn('AFC')}{seedColumn('NFC')}</div>
+      <Footer />
+    </div>
+  );
+}
+
+/** Week card: every game of the week, your pick (or the real result) highlighted. */
+function WeekCard({ owner, week, season, games, outcomes }: { owner: string; week: number; season: number; games: Game[]; outcomes: Outcomes }) {
+  const slate = gamesInWeek(games, week);
+  const open = slate.filter((g) => !g.isFinal);
+  const picked = open.filter((g) => outcomes[g.id]).length;
+  const finals = slate.length - open.length;
+  const half = Math.ceil(slate.length / 2);
+  const columns = [slate.slice(0, half), slate.slice(half)];
+  const compact = slate.length > 14;
+
+  const side = (g: Game, id: string, score: number | undefined, isHome: boolean) => {
+    const outcome = g.isFinal ? g.actualOutcome : outcomes[g.id];
+    const won = outcome === (isHome ? 'HOME_WIN' : 'AWAY_WIN');
+    const lost = outcome === (isHome ? 'AWAY_WIN' : 'HOME_WIN');
+    const team = TEAM_BY_ID[id];
+    return (
+      <div className={`flex items-center gap-3 px-4 ${compact ? 'h-11' : 'h-12'} ${lost ? 'opacity-35' : ''}`}
+        style={won ? { background: `linear-gradient(90deg, ${team.primaryColor}dd, ${team.primaryColor}33 75%, transparent)` } : undefined}>
+        <TeamBadge teamId={id} size="sm" />
+        <span className={`flex-1 truncate text-2xl ${won ? 'font-black text-white' : 'text-gray-200'}`}>{team.name}</span>
+        {g.isFinal ? <span className={`text-2xl tabular-nums ${won ? 'font-black' : 'text-white/60'}`}>{score}</span>
+          : won ? <span className="text-xl font-black text-white">✓</span> : null}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex h-full flex-col p-14" style={{ background: BG }}>
+      <Header owner={owner} eyebrow="picks" title={`Week ${week}`} season={season} />
+      <div className="mt-3 shrink-0 text-2xl text-white/55">
+        {weekDateRange(slate)} · {picked}/{open.length} picked{finals ? ` · ${finals} already final` : ''}
+      </div>
+      <div className="mt-6 flex shrink-0 gap-6">
+        {columns.map((col, ci) => (
+          <div key={ci} className="flex flex-1 flex-col gap-2.5">
+            {col.map((g) => {
+              const tie = (g.isFinal ? g.actualOutcome : outcomes[g.id]) === 'TIE';
+              return (
+                <div key={g.id} className="relative overflow-hidden rounded-xl bg-white/[0.06] ring-1 ring-white/10">
+                  {side(g, g.awayTeamId, g.awayScore, false)}
+                  <div className="h-px bg-white/[0.07]" />
+                  {side(g, g.homeTeamId, g.homeScore, true)}
+                  {(g.isFinal || tie) && (
+                    <span className={`absolute top-1/2 right-20 -translate-y-1/2 rounded px-2 py-0.5 text-sm font-bold tracking-wider ${tie ? 'bg-amber-400 text-gray-900' : 'bg-gray-900 text-amber-300 ring-1 ring-amber-300/40'}`}>
+                      {tie ? 'TIE' : 'FINAL'}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
       <Footer />
     </div>
   );
@@ -242,7 +309,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(pr
   const owner = ownerLabel(name);
   return (
     <div ref={ref} style={{ width: 1080, height: 1350, fontFamily: FONT }} className="overflow-hidden text-white">
-      {variant === 'team' && selection.kind === 'team' ? (
+      {variant === 'week' && selection.kind === 'week' ? (
+        <WeekCard owner={owner} week={selection.week} season={season} games={games} outcomes={outcomes} />
+      ) : variant === 'team' && selection.kind === 'team' ? (
         <TeamCard owner={owner} teamId={selection.teamId} standings={standings} season={season} games={games} outcomes={outcomes} />
       ) : variant === 'bracket' ? (
         <BracketCard owner={owner} standings={standings} bracket={bracket} season={season} />

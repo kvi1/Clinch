@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Analytics, type BeforeSendEvent } from '@vercel/analytics/react';
 import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { useShareQuery, useStore } from './state/store';
 import { Landing } from './pages/Landing';
@@ -59,6 +60,14 @@ function Forward({ to }: { to: string }) {
   return <Navigate to={`${to}${search}`} replace />;
 }
 
+/** Report pages without their ?s= scenario so analytics groups by page and never stores anyone's picks. */
+const stripQuery = (event: BeforeSendEvent): BeforeSendEvent => {
+  const url = new URL(event.url);
+  url.search = '';
+  url.hash = '';
+  return { ...event, url: url.toString() };
+};
+
 export default function App() {
   const season = useStore((s) => s.season);
   const error = useStore((s) => s.error);
@@ -69,6 +78,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <Analytics beforeSend={stripQuery} />
       <div className="min-h-dvh px-4 pb-32">
         <Header />
         <main className="mx-auto max-w-7xl">

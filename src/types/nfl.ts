@@ -63,6 +63,7 @@ export type Outcomes = Record<string, GameOutcome>;
 
 export type Selection =
   | { kind: 'team'; teamId: string }
-  | { kind: 'division'; conference: Conference; division: DivisionName };
+  | { kind: 'division'; conference: Conference; division: DivisionName }
+  | { kind: 'week'; week: number };
 
 export type BracketPicks = Record<string, string>;

@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import type { Game } from '../types/nfl';
+import { TEAM_BY_ID } from '../data/teams';
 import { favoriteOutcome, useStandings, useStore } from '../state/store';
 import { selectedTeamIds } from '../state/selection';
+import { gamesInWeek } from '../lib/season';
 import { RESULT_STYLE, teamSchedule } from '../lib/teamSchedule';
 import { GameRow } from './GameRow';
 import { TeamBadge } from './TeamBadge';
@@ -27,7 +29,30 @@ function PlayedGames({ teamId }: { teamId: string }) {
   );
 }
 
-/** Remaining games involving the selected team(s), grouped by week. Shared games appear once. */
+/** A game that has already been played: locked, shows the real score. */
+function FinalRow({ game }: { game: Game }) {
+  const side = (id: string, score: number | undefined, won: boolean) => (
+    <div className={`flex flex-1 items-center gap-2 rounded-xl border border-white/5 px-3 py-2 ${won ? 'bg-white/[0.06]' : 'opacity-50'}`}>
+      <TeamBadge teamId={id} size="xs" />
+      <span className="flex-1 truncate text-sm text-gray-200">{TEAM_BY_ID[id].name}</span>
+      <span className={`text-sm tabular-nums ${won ? 'font-bold text-white' : 'text-gray-400'}`}>{score}</span>
+    </div>
+  );
+  return (
+    <div className="py-2">
+      <div className="mb-1 text-[11px] font-semibold tracking-wider text-amber-300/80 uppercase">Final</div>
+      <div className="flex gap-1.5">
+        {side(game.awayTeamId, game.awayScore, game.actualOutcome === 'AWAY_WIN')}
+        {side(game.homeTeamId, game.homeScore, game.actualOutcome === 'HOME_WIN')}
+      </div>
+    </div>
+  );
+}
+
+const dayLabel = (g: Game) =>
+  g.timeTbd ? 'Time TBD' : new Date(g.kickoffIso).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+
+/** Games for the current selection: a team's or division's remaining games by week, or a whole week's slate by day. */
 export function GameList() {
   const season = useStore((s) => s.season)!;
   const selection = useStore((s) => s.selection);
@@ -37,19 +62,26 @@ export function GameList() {
   const standings = useStandings()!;
   const [showPlayed, setShowPlayed] = useState(false);
 
+  const weekMode = selection.kind === 'week';
   const teamIds = selectedTeamIds(selection);
   const ids = new Set(teamIds);
-  const mine = season.games.filter((g) => ids.has(g.homeTeamId) || ids.has(g.awayTeamId));
+  const mine = weekMode
+    ? gamesInWeek(season.games, selection.week)
+    : season.games.filter((g) => ids.has(g.homeTeamId) || ids.has(g.awayTeamId));
   const remaining = mine.filter((g) => !g.isFinal);
   const played = mine.length - remaining.length;
 
-  const weeks = new Map<number, Game[]>();
-  for (const g of remaining) weeks.set(g.week, [...(weeks.get(g.week) ?? []), g]);
-  const byWeek = [...weeks.entries()];
+  // Team/division: remaining games by week. Week: every game (finals included) by day.
+  const groups = new Map<string, Game[]>();
+  for (const g of weekMode ? mine : remaining) {
+    const key = weekMode ? dayLabel(g) : `Week ${g.week}`;
+    groups.set(key, [...(groups.get(key) ?? []), g]);
+  }
 
   const picked = remaining.filter((g) => outcomes[g.id]).length;
   const perspectiveFor = (g: Game) => {
     if (selection.kind === 'team') return selection.teamId;
+    if (selection.kind === 'week') return undefined;
     const inHome = teamIds.includes(g.homeTeamId);
     const inAway = teamIds.includes(g.awayTeamId);
     return inHome && inAway ? undefined : inHome ? g.homeTeamId : g.awayTeamId;
@@ -66,12 +98,12 @@ export function GameList() {
     <section>
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 className="text-base font-bold text-white">Remaining games</h2>
+          <h2 className="text-base font-bold text-white">{weekMode ? `Week ${selection.week} games` : 'Remaining games'}</h2>
           <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
             <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/10">
               <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${remaining.length ? (picked / remaining.length) * 100 : 100}%` }} />
             </div>
-            {picked}/{remaining.length} picked
+            {picked}/{remaining.length} picked{weekMode && played > 0 && ` · ${played} final`}
           </div>
         </div>
         <div className="flex gap-1.5">
@@ -83,16 +115,20 @@ export function GameList() {
           </button>
         </div>
       </div>
-      {remaining.length === 0 && <p className="card p-4 text-sm text-gray-400">No games left — the regular season is complete.</p>}
+      {remaining.length === 0 && (
+        <p className="card mb-3 p-4 text-sm text-gray-400">
+          {weekMode ? 'Every game this week has been played — results are shown below.' : 'No games left — the regular season is complete.'}
+        </p>
+      )}
       <div className="flex flex-col gap-3">
-        {byWeek.map(([week, games]) => (
-          <div key={week} className="card px-4 py-1">
+        {[...groups.entries()].map(([label, games]) => (
+          <div key={label} className="card px-4 py-1">
             <div className="flex items-center gap-2 pt-3 text-[11px] font-bold tracking-wider text-emerald-300 uppercase">
-              Week {week}
+              {label}
               <span className="h-px flex-1 bg-gradient-to-r from-emerald-300/30 to-transparent" />
             </div>
             <div className="divide-y divide-white/5">
-              {games.map((g) => <GameRow key={g.id} game={g} perspective={perspectiveFor(g)} />)}
+              {games.map((g) => (g.isFinal ? <FinalRow key={g.id} game={g} /> : <GameRow key={g.id} game={g} perspective={perspectiveFor(g)} />))}
             </div>
           </div>
         ))}

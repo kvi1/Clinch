@@ -112,6 +112,7 @@ export function Landing() {
     setSelection({ kind: 'team', teamId });
     navigate(NFL.predict);
   };
+  const goWeek = () => setSelection({ kind: 'week', week: currentWeek });
   const goDivision = (conference: Conference, division: DivisionName) => {
     setSelection({ kind: 'division', conference, division });
     navigate(NFL.predict);
@@ -129,12 +130,11 @@ export function Landing() {
               {season.season} · {remaining.length ? `WEEK ${currentWeek} · ${remaining.length} GAMES LEFT` : 'REGULAR SEASON FINAL'}
             </div>
             <h1 className="font-display text-[3.6rem] leading-[0.85] font-black text-white uppercase italic sm:text-[5.5rem]">
-              Who gets in?
-              <span className="block text-emerald-400">You make the call.</span>
+              Clinch
+              <span className="block text-emerald-400">Where You make the call.</span>
             </h1>
             <p className="mt-5 max-w-md text-base text-gray-300">
-              Pick every remaining game, watch the standings and tiebreakers sort themselves out, and share your road to
-              the title.
+              Pick every game, watch the standings and tiebreakers sort themselves out, and share your predictions.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-4">
               <Link to={NFL.predict} className="group inline-block -skew-x-12 bg-emerald-400 px-7 py-3 shadow-[6px_6px_0_0_rgba(0,0,0,.5)] transition hover:bg-emerald-300">
@@ -169,7 +169,7 @@ export function Landing() {
           <section className="mt-12">
             <div className="mb-4 flex items-end justify-between">
               <h2 className="font-display text-3xl font-black text-white uppercase italic">Week {currentWeek} slate</h2>
-              <Link to={NFL.predict} className="font-display text-base font-bold tracking-wide text-emerald-400 uppercase hover:text-emerald-300">Call these games ›</Link>
+              <Link to={NFL.predict} onClick={goWeek} className="font-display text-base font-bold tracking-wide text-emerald-400 uppercase hover:text-emerald-300">Call these games ›</Link>
             </div>
             <div className="grid gap-px overflow-hidden border border-white/10 bg-white/10 max-sm:[&>*:nth-child(n+7)]:hidden sm:grid-cols-2 lg:grid-cols-4">
               {slate.map((g) => (
@@ -193,7 +193,7 @@ export function Landing() {
               ))}
             </div>
             {slate.length > 6 && (
-              <Link to={NFL.predict} className="mt-2 block border border-white/10 py-2 text-center font-display text-sm font-bold tracking-wide text-gray-300 uppercase sm:hidden">
+              <Link to={NFL.predict} onClick={goWeek} className="mt-2 block border border-white/10 py-2 text-center font-display text-sm font-bold tracking-wide text-gray-300 uppercase sm:hidden">
                 + {slate.length - 6} more games
               </Link>
             )}

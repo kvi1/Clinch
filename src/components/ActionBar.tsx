@@ -10,12 +10,14 @@ const EXPORT_LABEL: Record<ShareVariant, string> = {
   team: 'Export card',
   standings: 'Export image',
   bracket: 'Export bracket',
+  week: 'Export week',
 };
 
 const DIALOG_TITLE: Record<ShareVariant, string> = {
   team: 'Export team card',
   standings: 'Export standings',
   bracket: 'Export bracket',
+  week: 'Export week picks',
 };
 
 /** Floating bottom bar: copy share link, export PNG, switch page. */
@@ -53,7 +55,10 @@ export function ActionBar({ variant }: { variant: ShareVariant }) {
     if (!cardRef.current) return;
     setBusy(true);
     try {
-      const name = variant === 'team' && selection.kind === 'team' ? `clinch-${selection.teamId.toLowerCase()}` : `clinch-${variant}`;
+      const name =
+        variant === 'team' && selection.kind === 'team' ? `clinch-${selection.teamId.toLowerCase()}`
+          : variant === 'week' && selection.kind === 'week' ? `clinch-week-${selection.week}`
+            : `clinch-${variant}`;
       await exportPng(cardRef.current, `${name}.png`);
       setDialogOpen(false);
     } catch (err) {

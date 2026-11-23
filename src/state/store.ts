@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { BracketPicks, Game, GameOutcome, Outcomes, SeasonData, Selection } from '../types/nfl';
+import type { BracketPicks, Conference, DivisionName, Game, GameOutcome, Outcomes, SeasonData, Selection } from '../types/nfl';
 import { computeStandings, type StandingsResult } from '../engine/standings';
 import { buildBracket, type BracketResult } from '../engine/bracket';
 import { DEFAULT_SELECTION, decodeState, encodeState } from './urlState';
@@ -10,6 +10,9 @@ interface AppState {
   error: string | null;
   outcomes: Outcomes;
   selection: Selection;
+  /** Last team / division viewed, so switching modes can return to them. Not shared. */
+  lastTeamId: string;
+  lastDivision: { conference: Conference; division: DivisionName };
   bracketPicks: BracketPicks;
   /** Name shown on exported images. Per-device (localStorage), never put in share links. */
   displayName: string;
@@ -60,6 +63,8 @@ export const useStore = create<AppState>((set, get) => ({
   error: null,
   outcomes: {},
   selection: DEFAULT_SELECTION,
+  lastTeamId: 'DAL',
+  lastDivision: { conference: 'NFC', division: 'East' },
   bracketPicks: {},
   displayName: readName(),
 
@@ -114,7 +119,12 @@ export const useStore = create<AppState>((set, get) => ({
     set({ outcomes: next, bracketPicks: cleanPicks(season.games, next, bracketPicks) });
   },
 
-  setSelection: (selection) => set({ selection }),
+  setSelection: (selection) =>
+    set(
+      selection.kind === 'team' ? { selection, lastTeamId: selection.teamId }
+        : selection.kind === 'division' ? { selection, lastDivision: { conference: selection.conference, division: selection.division } }
+          : { selection },
+    ),
 
   setBracketPick: (matchupId, teamId) => {
     const { season, outcomes, bracketPicks } = get();
