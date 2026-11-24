@@ -1,11 +1,11 @@
-import { CONFERENCES, DIVISIONS, TEAM_BY_ID, divisionTeams } from '../data/teams';
-import { useEffect, useRef } from 'react';
+import { CONFERENCES, DIVISIONS, TEAMS, TEAM_BY_ID, divisionTeams } from '../data/teams';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../state/store';
 import { currentWeek } from '../lib/season';
 import { TeamBadge } from './TeamBadge';
 
-/** One team / Division / Week segmented control. Remembers the last team and division you looked at. */
-export function ModeSwitch() {
+/** One team / Division / Week mode cards. Remembers the last team and division you looked at. */
+export function ModeCards() {
   const selection = useStore((s) => s.selection);
   const setSelection = useStore((s) => s.setSelection);
   const lastTeamId = useStore((s) => s.lastTeamId);
@@ -33,22 +33,87 @@ export function ModeSwitch() {
     if (selection.kind !== 'week') setSelection({ kind: 'week', week: currentWeek(games) });
   };
 
-  const tabs = [
-    ['team', 'One team', toTeam],
-    ['division', 'Division', toDivision],
-    ['week', 'Week', toWeek],
+  const modes = [
+    { kind: 'team', label: 'One team', blurb: "Plan one team's road — all 17 games.", exports: 'Team card', onClick: toTeam },
+    { kind: 'division', label: 'Division', blurb: 'Settle a 4-team division race.', exports: 'Standings image', onClick: toDivision },
+    { kind: 'week', label: 'Week', blurb: "Call every game on one week's slate.", exports: 'Week picks image', onClick: toWeek },
   ] as const;
   return (
-    <div className="flex rounded-xl bg-white/[0.06] p-1 ring-1 ring-white/10" role="tablist" aria-label="Prediction mode">
-      {tabs.map(([kind, label, onClick]) => {
+    <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Prediction mode">
+      {modes.map(({ kind, label, blurb, exports, onClick }) => {
         const active = selection.kind === kind;
         return (
           <button key={kind} type="button" role="tab" aria-selected={active} onClick={onClick}
-            className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap transition-colors ${active ? 'bg-white text-gray-950 shadow' : 'text-gray-300 hover:text-white'}`}>
-            {label}
+            className={`flex flex-col rounded-xl border p-2.5 text-left transition-colors sm:p-3.5 ${
+              active ? 'border-emerald-400 bg-emerald-400/10' : 'border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.06]'
+            }`}>
+            <span className={`font-display text-lg leading-none font-black uppercase italic sm:text-2xl ${active ? 'text-emerald-300' : 'text-white'}`}>{label}</span>
+            <span className="mt-1.5 text-[11px] leading-snug text-gray-400 sm:text-sm">{blurb}</span>
+            <span className="mt-auto hidden pt-2 text-[11px] font-semibold tracking-wider text-gray-500 uppercase sm:block">Exports: {exports}</span>
           </button>
         );
       })}
+    </div>
+  );
+}
+
+const TEAMS_BY_CITY = [...TEAMS].sort((a, b) => a.city.localeCompare(b.city) || a.name.localeCompare(b.name));
+
+/** One-team mode: every team as its own color tile, grouped only by conference, A–Z by city.
+ *  On phones the grid collapses to a "Change team" bar after a pick, so the games aren't pushed far down. */
+export function TeamPicker({ selectedId }: { selectedId: string }) {
+  const setSelection = useStore((s) => s.setSelection);
+  const [open, setOpen] = useState(true);
+  const current = TEAM_BY_ID[selectedId];
+
+  return (
+    <div>
+      {!open && (
+        <button type="button" onClick={() => setOpen(true)}
+          className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-2 pr-4 text-left sm:hidden">
+          <span className="flex h-11 w-16 items-center justify-center rounded-lg font-display text-2xl font-black text-white italic"
+            style={{ background: current.primaryColor, boxShadow: `inset 0 -3px 0 ${current.secondaryColor}` }}>{current.id}</span>
+          <span className="flex-1 text-sm font-semibold text-gray-100">{current.city} {current.name}</span>
+          <span className="text-xs font-bold tracking-wider text-emerald-300 uppercase">Change team ▾</span>
+        </button>
+      )}
+      <div className={`flex flex-col gap-4 ${open ? '' : 'max-sm:hidden'}`}>
+        {CONFERENCES.map((conference) => (
+          <div key={conference}>
+            <div className="mb-2 font-display text-sm font-bold tracking-[0.25em] text-gray-400">{conference}</div>
+            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8">
+              {TEAMS_BY_CITY.filter((t) => t.conference === conference).map((t) => {
+                const selected = t.id === selectedId;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    aria-pressed={selected}
+                    aria-label={`${t.city} ${t.name}`}
+                    onClick={() => {
+                      setSelection({ kind: 'team', teamId: t.id });
+                      setOpen(false);
+                    }}
+                    className={`relative flex h-14 flex-col justify-center overflow-hidden rounded-lg px-2.5 text-left transition hover:-translate-y-0.5 hover:brightness-110 ${
+                      selected ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-[#070a10]' : 'opacity-75 hover:opacity-100'
+                    }`}
+                    style={{
+                      background: `linear-gradient(135deg, ${t.primaryColor} 0%, ${t.primaryColor}cc 55%, ${t.primaryColor}77 100%)`,
+                      boxShadow: `inset 0 -3px 0 ${t.secondaryColor}`,
+                    }}
+                  >
+                    <span className="font-display text-2xl leading-none font-black text-white italic drop-shadow">{t.id}</span>
+                    <span className="mt-0.5 truncate text-[10px] font-semibold text-white/85">{t.name}</span>
+                    {selected && (
+                      <span className="absolute top-1 right-1 grid h-4 w-4 place-items-center rounded-full bg-emerald-400 text-[10px] font-black text-gray-950">✓</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -96,53 +161,29 @@ export function WeekPicker({ week }: { week: number }) {
   );
 }
 
-/** Team mode: tap a team badge. Division mode: tap a division card. */
+/** Picker for the current mode: team tiles, division cards, or week row. */
 export function SelectionPicker() {
   const selection = useStore((s) => s.selection);
   const setSelection = useStore((s) => s.setSelection);
-  const teamMode = selection.kind === 'team';
   if (selection.kind === 'week') return <WeekPicker week={selection.week} />;
+  if (selection.kind === 'team') return <TeamPicker selectedId={selection.teamId} />;
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {CONFERENCES.flatMap((conference) =>
         DIVISIONS.map((division) => {
-          const teams = divisionTeams(conference, division);
-          const divSelected = selection.kind === 'division' && selection.conference === conference && selection.division === division;
-          const containsTeam = teamMode && teams.some((t) => t.id === selection.teamId);
-          const label = (
-            <div className="mb-1.5 flex items-center justify-between text-[10px] font-bold tracking-wider text-gray-400 uppercase">
-              <span>{conference} {division}</span>
-              {divSelected && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
-            </div>
-          );
-          const badges = (
-            <div className="grid grid-cols-4 gap-1">
-              {teams.map((t) => {
-                const teamSelected = teamMode && selection.teamId === t.id;
-                const badge = <TeamBadge teamId={t.id} size="xs" dim={teamMode && !teamSelected && containsTeam} />;
-                return teamMode ? (
-                  <button key={t.id} type="button" aria-pressed={teamSelected} aria-label={`${t.city} ${t.name}`}
-                    onClick={() => setSelection({ kind: 'team', teamId: t.id })}
-                    className={`rounded-md transition hover:-translate-y-0.5 hover:brightness-125 ${teamSelected ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-gray-950' : ''}`}>
-                    {badge}
-                  </button>
-                ) : (
-                  <span key={t.id}>{badge}</span>
-                );
-              })}
-            </div>
-          );
-          const base = 'rounded-xl border p-2 text-left transition-colors';
-          return teamMode ? (
-            <div key={`${conference}${division}`} className={`${base} ${containsTeam ? 'border-emerald-400/40 bg-emerald-400/[0.06]' : 'border-white/[0.06] bg-white/[0.03]'}`}>
-              {label}{badges}
-            </div>
-          ) : (
-            <button key={`${conference}${division}`} type="button" aria-pressed={divSelected}
+          const selected = selection.conference === conference && selection.division === division;
+          return (
+            <button key={`${conference}${division}`} type="button" aria-pressed={selected}
               onClick={() => setSelection({ kind: 'division', conference, division })}
-              className={`${base} ${divSelected ? 'border-emerald-400 bg-emerald-400/10' : 'border-white/[0.06] bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'}`}>
-              {label}{badges}
+              className={`rounded-xl border p-2 text-left transition-colors ${selected ? 'border-emerald-400 bg-emerald-400/10' : 'border-white/[0.06] bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'}`}>
+              <div className="mb-1.5 flex items-center justify-between text-[10px] font-bold tracking-wider text-gray-400 uppercase">
+                <span>{conference} {division}</span>
+                {selected && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
+              </div>
+              <div className="grid grid-cols-4 gap-1">
+                {divisionTeams(conference, division).map((t) => <TeamBadge key={t.id} teamId={t.id} size="xs" />)}
+              </div>
             </button>
           );
         }),

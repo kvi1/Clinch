@@ -88,6 +88,8 @@ function SeedBoard({ seeds, byTeam }: { seeds: Record<Conference, string[]>; byT
 export function Landing() {
   const season = useStore((s) => s.season)!;
   const setSelection = useStore((s) => s.setSelection);
+  const lastTeamId = useStore((s) => s.lastTeamId);
+  const lastDivision = useStore((s) => s.lastDivision);
   const navigate = useNavigate();
 
   const { current, remaining, currentWeek, lastFinals, slate } = useMemo(() => {
@@ -164,6 +166,69 @@ export function Landing() {
           </ol>
         </section>
 
+        {/* Three ways to predict */}
+        <section className="mt-12">
+          <h2 className="font-display text-3xl font-black text-white uppercase italic">Three ways to predict</h2>
+          <p className="mt-1 mb-5 text-sm text-gray-400">Every pick feeds the same standings and bracket — choose whichever view fits what you're arguing about.</p>
+          <div className="grid gap-3 md:grid-cols-3">
+            {[
+              {
+                key: 'team', title: 'One team', blurb: "Plan your team's road. Call all of its remaining games and see where it finishes.",
+                exports: 'Team card with all 17 games',
+                onClick: () => { setSelection({ kind: 'team', teamId: lastTeamId }); navigate(NFL.predict); },
+                preview: (
+                  <div className="grid grid-cols-[repeat(17,minmax(0,1fr))] gap-0.5">
+                    {'WWLWTLWWLLWWLWLLW'.split('').map((r, i) => (
+                      <span key={i} className={`h-5 rounded-sm ${r === 'W' ? 'bg-emerald-500' : r === 'L' ? 'bg-rose-500' : 'bg-amber-400'} ${i > 9 ? 'opacity-60 ring-1 ring-white/50 ring-inset' : ''}`} />
+                    ))}
+                  </div>
+                ),
+              },
+              {
+                key: 'division', title: 'Division', blurb: 'Settle a four-team race. Every game those teams have left, with live division standings.',
+                exports: 'Standings image',
+                onClick: () => { setSelection({ kind: 'division', ...lastDivision }); navigate(NFL.predict); },
+                preview: (
+                  <div className="flex flex-col gap-0.5">
+                    {divisionTeams(lastDivision.conference, lastDivision.division).map((t, i) => (
+                      <div key={t.id} className="flex h-[18px] items-center gap-1.5 pl-1.5" style={{ width: `${100 - i * 14}%`, background: `linear-gradient(90deg, ${t.primaryColor}, ${t.primaryColor}55)` }}>
+                        <span className="font-display text-xs font-black text-white italic">{t.id}</span>
+                      </div>
+                    ))}
+                  </div>
+                ),
+              },
+              {
+                key: 'week', title: 'Week', blurb: `Call a whole slate — every game in Week ${currentWeek}, from Thursday night to Monday.`,
+                exports: 'Week picks image',
+                onClick: () => { goWeek(); navigate(NFL.predict); },
+                preview: (
+                  <div className="grid grid-cols-2 gap-1">
+                    {remaining.slice(0, 4).map((g) => (
+                      <div key={g.id} className="flex h-[22px] items-center justify-between rounded-sm bg-white/[0.06] px-1.5 font-display text-xs font-bold">
+                        <span className="text-white">{g.awayTeamId}</span>
+                        <span className="text-gray-600">@</span>
+                        <span className="text-gray-400">{g.homeTeamId}</span>
+                      </div>
+                    ))}
+                  </div>
+                ),
+              },
+            ].map((m) => (
+              <button key={m.key} type="button" onClick={m.onClick}
+                className="group flex flex-col border border-white/10 bg-white/[0.02] p-5 text-left transition-colors hover:border-emerald-400/60 hover:bg-white/[0.04]">
+                <div className="mb-4 flex h-[78px] flex-col justify-center">{m.preview}</div>
+                <h3 className="font-display text-3xl leading-none font-black text-white uppercase italic group-hover:text-emerald-300">{m.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-gray-400">{m.blurb}</p>
+                <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3 text-xs">
+                  <span className="font-semibold tracking-wider text-gray-500 uppercase">Exports: {m.exports}</span>
+                  <span className="shrink-0 pl-3 font-display text-base font-black tracking-wide whitespace-nowrap text-emerald-400 uppercase italic">Start ›</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+
         {/* This week's slate */}
         {slate.length > 0 && (
           <section className="mt-12">
@@ -171,9 +236,9 @@ export function Landing() {
               <h2 className="font-display text-3xl font-black text-white uppercase italic">Week {currentWeek} slate</h2>
               <Link to={NFL.predict} onClick={goWeek} className="font-display text-base font-bold tracking-wide text-emerald-400 uppercase hover:text-emerald-300">Call these games ›</Link>
             </div>
-            <div className="grid gap-px overflow-hidden border border-white/10 bg-white/10 max-sm:[&>*:nth-child(n+7)]:hidden sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-1 max-sm:[&>*:nth-child(n+7)]:hidden sm:grid-cols-2 lg:grid-cols-4">
               {slate.map((g) => (
-                <div key={g.id} className="flex items-center gap-3 bg-[#0b0f17] px-3 py-2.5">
+                <div key={g.id} className="flex items-center gap-3 border border-white/10 bg-[#0b0f17] px-3 py-2.5">
                   <div className="flex flex-1 flex-col gap-1">
                     {[g.awayTeamId, g.homeTeamId].map((id) => (
                       <button key={id} type="button" onClick={() => goTeam(id)} className="flex items-center gap-2 text-left hover:brightness-125">
