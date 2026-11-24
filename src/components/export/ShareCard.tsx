@@ -61,10 +61,10 @@ function Wordmark() {
 function Footer() {
   return (
     <div className="mt-auto flex shrink-0 items-end justify-between pt-6">
-      <div className="text-2xl text-white/60">
+      <div className="text-2xl whitespace-nowrap text-white/60">
         Make yours at <span className="font-display text-3xl font-black tracking-wide text-emerald-300 italic">CLINCHAPP.IO</span>
       </div>
-      <div className="text-base text-white/30">Not affiliated with the NFL</div>
+      <div className="text-base whitespace-nowrap text-white/30">Not affiliated with the NFL</div>
     </div>
   );
 }
@@ -128,46 +128,69 @@ function TeamCard({ owner, teamId, standings, season, games, outcomes }: { owner
   );
 }
 
-function StandingsCard({ owner, selection, standings, season }: { owner: string; selection: Selection; standings: StandingsResult; season: number }) {
+/** Division card: every division team's full season, game by game, then a compact playoff line. */
+function StandingsCard({ owner, selection, standings, season, games, outcomes }: {
+  owner: string; selection: Selection; standings: StandingsResult; season: number; games: Game[]; outcomes: Outcomes;
+}) {
   const highlight = selectedTeamIds(selection);
   // Only rendered for team/division selections, which always have a division.
   const divIds = standings.divisions[selectionDivisionKey(selection)!];
-  const seedColumn = (c: Conference) => (
-    <div className="flex-1">
-      <div className="mb-3 text-2xl font-bold tracking-widest text-white/50">{c}</div>
-      {standings.seeds[c].slice(0, 7).map((id, i) => {
-        const r = standings.byTeam[id];
-        return (
-          <div key={id} className={`mb-2 flex items-center gap-3 rounded-xl px-3 py-2 ${highlight.includes(id) ? 'bg-emerald-400/20 ring-1 ring-emerald-300/40' : 'bg-white/[0.06]'}`}>
-            <span className="w-8 text-right text-3xl font-black text-emerald-300">{i + 1}</span>
-            <TeamBadge teamId={id} size="lg" />
-            <span className="flex-1 text-2xl font-semibold text-gray-100">{TEAM_BY_ID[id].name}</span>
-            <span className="text-2xl text-gray-300 tabular-nums">{fmtRecord(r.wins, r.losses, r.ties)}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
+  const conference = TEAM_BY_ID[divIds[0]].conference;
+
   return (
     <div className="flex h-full flex-col p-14" style={{ background: BG }}>
       <Header owner={owner} eyebrow="projection" title={selectionLabel(selection)} season={season} />
-      <div className="mt-10 rounded-3xl bg-white/[0.06] p-6 ring-1 ring-white/10">
+
+      <div className="mt-8 flex shrink-0 flex-col gap-5">
         {divIds.map((id) => {
           const r = standings.byTeam[id];
+          const team = TEAM_BY_ID[id];
+          const seed = r.conferenceSeed!;
+          const schedule = teamSchedule(games, outcomes, id);
           return (
-            <div key={id} className="flex items-center gap-4 rounded-xl px-3 py-2">
-              <span className="w-8 text-3xl font-black text-white/40">{r.divisionRank}</span>
-              <TeamBadge teamId={id} size="lg" />
-              <span className="flex-1 text-3xl font-semibold">{TEAM_BY_ID[id].city} {TEAM_BY_ID[id].name}</span>
-              <span className="text-4xl font-black tabular-nums">{fmtRecord(r.wins, r.losses, r.ties)}</span>
-              <span className={`w-28 text-right text-2xl font-bold ${r.conferenceSeed! <= 7 ? 'text-emerald-300' : 'text-white/40'}`}>
-                {r.conferenceSeed! <= 7 ? `#${r.conferenceSeed} seed` : 'out'}
-              </span>
+            <div key={id} className="rounded-2xl bg-white/[0.05] p-4 ring-1 ring-white/10"
+              style={{ background: `linear-gradient(90deg, ${team.primaryColor}55, rgba(255,255,255,.04) 45%)` }}>
+              <div className="mb-3 flex items-center gap-4">
+                <span className="w-7 text-3xl font-black text-white/40">{r.divisionRank}</span>
+                <TeamBadge teamId={id} size="md" />
+                <span className="flex-1 truncate text-3xl font-bold">{team.city} {team.name}</span>
+                <span className="shrink-0 text-4xl font-black whitespace-nowrap tabular-nums">{fmtRecord(r.wins, r.losses, r.ties)}</span>
+                <span className={`w-40 shrink-0 text-right whitespace-nowrap text-2xl font-bold ${seed <= 7 ? 'text-emerald-300' : 'text-white/40'}`}>
+                  {seed === 1 ? 'No. 1 · bye' : seed <= 7 ? `No. ${seed} seed` : 'Out'}
+                </span>
+              </div>
+              <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${schedule.length}, minmax(0, 1fr))` }}>
+                {schedule.map((g) => (
+                  <div key={g.game.id}
+                    className={`flex h-[78px] flex-col items-center justify-center rounded-md leading-none ${
+                      g.result ? RESULT_STYLE[g.result] : 'bg-white/10 text-white/50'
+                    } ${g.predicted ? 'ring-2 ring-white/80 ring-inset' : ''}`}>
+                    <span className="text-[12px] font-semibold opacity-70">{g.home ? 'vs' : '@'}</span>
+                    <span className="mt-1 text-[16px] font-black">{g.opponent}</span>
+                    <span className="mt-1.5 text-[15px] font-black opacity-80">{g.result ?? '–'}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           );
         })}
       </div>
-      <div className="mt-10 flex gap-8">{seedColumn('AFC')}{seedColumn('NFC')}</div>
+
+      <div className="mt-5 flex shrink-0 items-center gap-8 text-lg whitespace-nowrap text-white/50">
+        <span className="flex items-center gap-2"><span className="inline-block h-4 w-4 rounded bg-emerald-500" /> Played</span>
+        <span className="flex items-center gap-2"><span className="inline-block h-4 w-4 rounded ring-2 ring-white/80 ring-inset" /> Your pick</span>
+        <span className="ml-auto">Weeks 1–18 · W / L / T</span>
+      </div>
+
+      <div className="mt-6 flex shrink-0 items-center gap-3 rounded-2xl bg-white/[0.05] px-5 py-4 ring-1 ring-white/10">
+        <span className="mr-2 text-xl font-bold tracking-[0.2em] whitespace-nowrap text-white/50">{conference} PLAYOFFS</span>
+        {standings.seeds[conference].slice(0, 7).map((id, i) => (
+          <span key={id} className={`flex items-center gap-1.5 rounded-lg px-1.5 py-1 ${highlight.includes(id) ? 'bg-emerald-400/20 ring-1 ring-emerald-300/50' : ''}`}>
+            <span className="text-xl font-black text-emerald-300">{i + 1}</span>
+            <TeamBadge teamId={id} size="sm" />
+          </span>
+        ))}
+      </div>
       <Footer />
     </div>
   );
@@ -316,7 +339,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(pr
       ) : variant === 'bracket' ? (
         <BracketCard owner={owner} standings={standings} bracket={bracket} season={season} />
       ) : (
-        <StandingsCard owner={owner} selection={selection} standings={standings} season={season} />
+        <StandingsCard owner={owner} selection={selection} standings={standings} season={season} games={games} outcomes={outcomes} />
       )}
     </div>
   );
