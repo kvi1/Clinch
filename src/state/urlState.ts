@@ -60,4 +60,6 @@ export function decodeState(games: Game[], encoded: string): SharedState | null 
   }
 }
 
-export const DEFAULT_SELECTION: Selection = { kind: 'division', conference: 'NFC', division: 'East' };
+/** First tile in the team picker (AFC, A–Z by city). Predict opens in One team mode on this team. */
+export const DEFAULT_TEAM_ID = 'BAL';
+export const DEFAULT_SELECTION: Selection = { kind: 'team', teamId: DEFAULT_TEAM_ID };

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { BracketPicks, Conference, DivisionName, Game, GameOutcome, Outcomes, SeasonData, Selection } from '../types/nfl';
 import { computeStandings, type StandingsResult } from '../engine/standings';
 import { buildBracket, type BracketResult } from '../engine/bracket';
-import { DEFAULT_SELECTION, decodeState, encodeState } from './urlState';
+import { DEFAULT_SELECTION, DEFAULT_TEAM_ID, decodeState, encodeState } from './urlState';
 import { MAX_NAME_LENGTH } from '../lib/format';
 
 interface AppState {
@@ -63,7 +63,7 @@ export const useStore = create<AppState>((set, get) => ({
   error: null,
   outcomes: {},
   selection: DEFAULT_SELECTION,
-  lastTeamId: 'DAL',
+  lastTeamId: DEFAULT_TEAM_ID,
   lastDivision: { conference: 'NFC', division: 'East' },
   bracketPicks: {},
   displayName: readName(),

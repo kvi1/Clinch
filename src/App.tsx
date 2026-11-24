@@ -1,12 +1,22 @@
 import { useEffect } from 'react';
 import { Analytics, type BeforeSendEvent } from '@vercel/analytics/react';
-import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation, useNavigationType } from 'react-router-dom';
 import { useShareQuery, useStore } from './state/store';
 import { Landing } from './pages/Landing';
 import { Predict } from './pages/Predict';
 import { Bracket } from './pages/Bracket';
 import { NFL } from './routes';
 import logo from './assets/logo.png';
+
+/** New page → start at the top. Back/forward (POP) keeps the browser's restored scroll position. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  const navType = useNavigationType();
+  useEffect(() => {
+    if (navType !== 'POP') window.scrollTo(0, 0);
+  }, [pathname, navType]);
+  return null;
+}
 
 /** Mirrors the scenario into ?s= so the address bar is always a shareable link (not on the landing page). */
 function UrlSync() {
@@ -79,6 +89,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Analytics beforeSend={stripQuery} />
+      <ScrollToTop />
       <div className="min-h-dvh px-4 pb-32">
         <Header />
         <main className="mx-auto max-w-7xl">
