@@ -13,10 +13,12 @@ interface Props {
   onExport: () => void;
   /** A ShareCard element; rendered scaled down as a live preview. */
   preview: ReactNode;
+  /** Card-specific settings shown above the name field (e.g. division scope). */
+  options?: ReactNode;
 }
 
 /** Bottom sheet (phones) / centered dialog (desktop): name the card, preview it, export it. */
-export function ExportDialog({ open, busy, title, onClose, onExport, preview }: Props) {
+export function ExportDialog({ open, busy, title, onClose, onExport, preview, options }: Props) {
   const name = useStore((s) => s.displayName);
   const setName = useStore((s) => s.setDisplayName);
   const inputId = useId();
@@ -55,6 +57,8 @@ export function ExportDialog({ open, busy, title, onClose, onExport, preview }: 
           <div style={{ width: 1080, height: 1350, transform: `scale(${SCALE})`, transformOrigin: 'top left' }}>{preview}</div>
         </div>
 
+        {options}
+
         <label htmlFor={inputId} className="mb-1.5 block text-xs font-semibold tracking-wider text-gray-400 uppercase">
           Your name <span className="font-normal text-gray-500 normal-case">(optional)</span>
         </label>
@@ -69,7 +73,7 @@ export function ExportDialog({ open, busy, title, onClose, onExport, preview }: 
           autoComplete="nickname"
           className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-base text-white placeholder:text-gray-600 focus:border-emerald-400 focus:outline-none"
         />
-        <p className="mt-1.5 text-xs text-gray-500">Shown at the top of the image. Saved on this device only — never in shared links.</p>
+        <p className="mt-1.5 text-xs text-gray-500">Shows as “Name’s Predictions” at the top of the image. Saved on this device only — never in shared links.</p>
 
         <button
           type="button"

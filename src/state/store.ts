@@ -16,6 +16,9 @@ interface AppState {
   bracketPicks: BracketPicks;
   /** Name shown on exported images. Per-device (localStorage), never put in share links. */
   displayName: string;
+  /** Division export: only unplayed games, or the full 17-game season. Per-device, not shared. */
+  divisionCardScope: DivisionCardScope;
+  setDivisionCardScope: (scope: DivisionCardScope) => void;
   setDisplayName: (name: string) => void;
   load: () => Promise<void>;
   setOutcome: (gameId: string, outcome: GameOutcome | null) => void;
@@ -28,6 +31,17 @@ interface AppState {
 
 const SEASON_URL = '/data/nfl-2026.json';
 const NAME_KEY = 'clinch.displayName';
+const SCOPE_KEY = 'clinch.divisionScope';
+
+export type DivisionCardScope = 'remaining' | 'season';
+
+function readScope(): DivisionCardScope {
+  try {
+    return localStorage.getItem(SCOPE_KEY) === 'season' ? 'season' : 'remaining';
+  } catch {
+    return 'remaining';
+  }
+}
 
 function readName(): string {
   try {
@@ -67,6 +81,16 @@ export const useStore = create<AppState>((set, get) => ({
   lastDivision: { conference: 'NFC', division: 'East' },
   bracketPicks: {},
   displayName: readName(),
+  divisionCardScope: readScope(),
+
+  setDivisionCardScope: (scope) => {
+    set({ divisionCardScope: scope });
+    try {
+      localStorage.setItem(SCOPE_KEY, scope);
+    } catch {
+      /* storage unavailable — choice just won't persist */
+    }
+  },
 
   setDisplayName: (name) => {
     const clean = name.slice(0, MAX_NAME_LENGTH);

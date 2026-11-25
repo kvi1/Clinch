@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { createContext, forwardRef, useContext } from 'react';
 import type { Conference, Game, Outcomes, PlayoffMatchup, Selection } from '../../types/nfl';
 import { TEAM_BY_ID } from '../../data/teams';
 import type { StandingsResult } from '../../engine/standings';
@@ -7,22 +7,27 @@ import { selectedTeamIds, selectionDivisionKey, selectionLabel } from '../../sta
 import { TeamBadge } from '../TeamBadge';
 import { Trophy } from '../Trophy';
 import logo from '../../assets/logo-256.png';
-import { fmtRecord, ownerLabel } from '../../lib/format';
+import { MAX_NAME_LENGTH, fmtRecord, possessive } from '../../lib/format';
 import { RESULT_STYLE, teamSchedule } from '../../lib/teamSchedule';
 import { gamesInWeek, weekDateRange } from '../../lib/season';
 
 export type ShareVariant = 'team' | 'standings' | 'bracket' | 'week';
+export type DivisionScope = 'remaining' | 'season';
+
+/** Optional name for the "<Name>'s Predictions" label, provided once by ShareCard. */
+const NameContext = createContext('');
 
 interface Props {
   variant: ShareVariant;
   selection: Selection;
   standings: StandingsResult;
   bracket: BracketResult;
-  season: number;
   games: Game[];
   outcomes: Outcomes;
   /** Shown as "<Name>'s 2026 projection"; blank → "My". */
   name?: string;
+  /** Division card only: unplayed games vs the full season. */
+  divisionScope?: DivisionScope;
 }
 
 const FONT = '"Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
@@ -35,11 +40,12 @@ function seedStatus(seed: number, conference: Conference, division: string) {
   return `Out of the playoffs`;
 }
 
-function Header({ owner, eyebrow, title, season }: { owner: string; eyebrow: string; title: string; season: number }) {
+function Header({ eyebrow, title }: { eyebrow: string; title: string }) {
+  const name = useContext(NameContext);
   return (
     <div className="flex shrink-0 items-start justify-between gap-8">
       <div className="min-w-0 flex-1">
-        <div className="text-2xl leading-snug font-bold tracking-[0.2em] break-words text-emerald-300 uppercase">{owner} {season} {eyebrow}</div>
+        <div className="text-2xl leading-snug font-bold tracking-[0.2em] break-words text-emerald-300 uppercase">{name ? `${possessive(name)} ${eyebrow}` : eyebrow}</div>
         <div className={`mt-3 leading-[1.05] font-black tracking-tight ${title.length > 16 ? 'text-6xl' : 'text-7xl'}`}>{title}</div>
       </div>
       <Wordmark />
@@ -60,17 +66,20 @@ function Wordmark() {
 
 function Footer() {
   return (
-    <div className="mt-auto flex shrink-0 items-end justify-between pt-6">
+    <div className="mt-auto flex shrink-0 items-end justify-between gap-6 pt-6">
       <div className="text-2xl whitespace-nowrap text-white/60">
         Make yours at <span className="font-display text-3xl font-black tracking-wide text-emerald-300 italic">CLINCHAPP.IO</span>
       </div>
-      <div className="text-base whitespace-nowrap text-white/30">Not affiliated with the NFL</div>
+      <div className="min-w-0 text-right">
+        <div className="text-base whitespace-nowrap text-white/30">Not affiliated with the NFL</div>
+      </div>
     </div>
   );
 }
 
 /** Single-team card: big projected record + all 17 games. */
-function TeamCard({ owner, teamId, standings, season, games, outcomes }: { owner: string; teamId: string; standings: StandingsResult; season: number; games: Game[]; outcomes: Outcomes }) {
+function TeamCard({ teamId, standings, games, outcomes }: { teamId: string; standings: StandingsResult; games: Game[]; outcomes: Outcomes }) {
+  const teamName = useContext(NameContext);
   const team = TEAM_BY_ID[teamId];
   const r = standings.byTeam[teamId];
   const schedule = teamSchedule(games, outcomes, teamId);
@@ -81,7 +90,7 @@ function TeamCard({ owner, teamId, standings, season, games, outcomes }: { owner
   return (
     <div className="flex h-full flex-col p-16" style={{ background: `radial-gradient(1000px 700px at 85% -10%, ${team.primaryColor}, transparent 70%), linear-gradient(160deg, #0b1220 0%, #070a10 70%)` }}>
       <div className="flex items-start justify-between gap-8">
-        <div className="min-w-0 flex-1 text-2xl leading-snug font-bold tracking-[0.2em] break-words text-white/80 uppercase">{owner} {season} projection</div>
+        <div className="min-w-0 flex-1 text-2xl leading-snug font-bold tracking-[0.2em] break-words text-white/80 uppercase">{teamName ? `${possessive(teamName)} Predictions` : 'Predictions'}</div>
         <Wordmark />
       </div>
       <div className="mt-8 flex items-center gap-8">
@@ -128,25 +137,37 @@ function TeamCard({ owner, teamId, standings, season, games, outcomes }: { owner
   );
 }
 
-/** Division card: every division team's full season, game by game, then a compact playoff line. */
-function StandingsCard({ owner, selection, standings, season, games, outcomes }: {
-  owner: string; selection: Selection; standings: StandingsResult; season: number; games: Game[]; outcomes: Outcomes;
+/**
+ * Division card: each division team's games, then a compact playoff line.
+ * "remaining" shows only unplayed games (the predictions); "season" shows all 17.
+ */
+function StandingsCard({ selection, standings, games, outcomes, scope }: {
+  selection: Selection; standings: StandingsResult; games: Game[]; outcomes: Outcomes;
+  scope: DivisionScope;
 }) {
   const highlight = selectedTeamIds(selection);
   // Only rendered for team/division selections, which always have a division.
   const divIds = standings.divisions[selectionDivisionKey(selection)!];
   const conference = TEAM_BY_ID[divIds[0]].conference;
 
+  const full = Object.fromEntries(divIds.map((id) => [id, teamSchedule(games, outcomes, id)]));
+  const remaining = Object.fromEntries(divIds.map((id) => [id, full[id].filter((g) => !g.game.isFinal)]));
+  const anyLeft = divIds.some((id) => remaining[id].length > 0);
+  const remainingMode = scope === 'remaining' && anyLeft; // season over → fall back to the full season
+  const lists = remainingMode ? remaining : full;
+  const cols = Math.max(...divIds.map((id) => lists[id].length));
+  const weeks = divIds.flatMap((id) => remaining[id].map((g) => g.game.week));
+  const weekSpan = weeks.length ? `Weeks ${Math.min(...weeks)}–${Math.max(...weeks)}` : '';
+
   return (
     <div className="flex h-full flex-col p-14" style={{ background: BG }}>
-      <Header owner={owner} eyebrow="projection" title={selectionLabel(selection)} season={season} />
+      <Header eyebrow="Predictions" title={selectionLabel(selection)} />
 
       <div className="mt-8 flex shrink-0 flex-col gap-5">
         {divIds.map((id) => {
           const r = standings.byTeam[id];
           const team = TEAM_BY_ID[id];
           const seed = r.conferenceSeed!;
-          const schedule = teamSchedule(games, outcomes, id);
           return (
             <div key={id} className="rounded-2xl bg-white/[0.05] p-4 ring-1 ring-white/10"
               style={{ background: `linear-gradient(90deg, ${team.primaryColor}55, rgba(255,255,255,.04) 45%)` }}>
@@ -159,15 +180,16 @@ function StandingsCard({ owner, selection, standings, season, games, outcomes }:
                   {seed === 1 ? 'No. 1 · bye' : seed <= 7 ? `No. ${seed} seed` : 'Out'}
                 </span>
               </div>
-              <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${schedule.length}, minmax(0, 1fr))` }}>
-                {schedule.map((g) => (
+              <div className={`grid ${remainingMode ? 'gap-2' : 'gap-1'}`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+                {lists[id].map((g) => (
                   <div key={g.game.id}
-                    className={`flex h-[78px] flex-col items-center justify-center rounded-md leading-none ${
+                    className={`flex flex-col items-center justify-center leading-none ${remainingMode ? 'h-[96px] rounded-lg' : 'h-[78px] rounded-md'} ${
                       g.result ? RESULT_STYLE[g.result] : 'bg-white/10 text-white/50'
                     } ${g.predicted ? 'ring-2 ring-white/80 ring-inset' : ''}`}>
-                    <span className="text-[12px] font-semibold opacity-70">{g.home ? 'vs' : '@'}</span>
-                    <span className="mt-1 text-[16px] font-black">{g.opponent}</span>
-                    <span className="mt-1.5 text-[15px] font-black opacity-80">{g.result ?? '–'}</span>
+                    {remainingMode && <span className="mb-1.5 text-[13px] font-bold tracking-wider opacity-70">WK {g.game.week}</span>}
+                    <span className={`${remainingMode ? 'text-[15px]' : 'text-[12px]'} font-semibold opacity-70`}>{g.home ? 'vs' : '@'}</span>
+                    <span className={`mt-1 font-black ${remainingMode ? 'text-[22px]' : 'text-[16px]'}`}>{g.opponent}</span>
+                    <span className={`mt-1.5 font-black opacity-80 ${remainingMode ? 'text-[17px]' : 'text-[15px]'}`}>{g.result ?? '–'}</span>
                   </div>
                 ))}
               </div>
@@ -177,9 +199,19 @@ function StandingsCard({ owner, selection, standings, season, games, outcomes }:
       </div>
 
       <div className="mt-5 flex shrink-0 items-center gap-8 text-lg whitespace-nowrap text-white/50">
-        <span className="flex items-center gap-2"><span className="inline-block h-4 w-4 rounded bg-emerald-500" /> Played</span>
-        <span className="flex items-center gap-2"><span className="inline-block h-4 w-4 rounded ring-2 ring-white/80 ring-inset" /> Your pick</span>
-        <span className="ml-auto">Weeks 1–18 · W / L / T</span>
+        {remainingMode ? (
+          <>
+            <span className="flex items-center gap-2"><span className="inline-block h-4 w-4 rounded bg-emerald-500 ring-2 ring-white/80 ring-inset" /> Your pick</span>
+            <span className="flex items-center gap-2"><span className="inline-block h-4 w-4 rounded bg-white/10" /> Not picked</span>
+            <span className="ml-auto">Remaining games · {weekSpan}</span>
+          </>
+        ) : (
+          <>
+            <span className="flex items-center gap-2"><span className="inline-block h-4 w-4 rounded bg-emerald-500" /> Played</span>
+            <span className="flex items-center gap-2"><span className="inline-block h-4 w-4 rounded ring-2 ring-white/80 ring-inset" /> Your pick</span>
+            <span className="ml-auto">Full season · Weeks 1–18</span>
+          </>
+        )}
       </div>
 
       <div className="mt-6 flex shrink-0 items-center gap-3 rounded-2xl bg-white/[0.05] px-5 py-4 ring-1 ring-white/10">
@@ -197,7 +229,7 @@ function StandingsCard({ owner, selection, standings, season, games, outcomes }:
 }
 
 /** Week card: every game of the week, your pick (or the real result) highlighted. */
-function WeekCard({ owner, week, season, games, outcomes }: { owner: string; week: number; season: number; games: Game[]; outcomes: Outcomes }) {
+function WeekCard({ week, games, outcomes }: { week: number; games: Game[]; outcomes: Outcomes }) {
   const slate = gamesInWeek(games, week);
   const open = slate.filter((g) => !g.isFinal);
   const picked = open.filter((g) => outcomes[g.id]).length;
@@ -224,7 +256,7 @@ function WeekCard({ owner, week, season, games, outcomes }: { owner: string; wee
 
   return (
     <div className="flex h-full flex-col p-14" style={{ background: BG }}>
-      <Header owner={owner} eyebrow="picks" title={`Week ${week}`} season={season} />
+      <Header eyebrow="Predictions" title={`Week ${week}`} />
       <div className="mt-3 shrink-0 text-2xl text-white/55">
         {weekDateRange(slate)} · {picked}/{open.length} picked{finals ? ` · ${finals} already final` : ''}
       </div>
@@ -274,14 +306,14 @@ function MatchupBox({ m, seedOf }: { m: PlayoffMatchup; seedOf: (id?: string) =>
   );
 }
 
-function BracketCard({ owner, standings, bracket, season }: { owner: string; standings: StandingsResult; bracket: BracketResult; season: number }) {
+function BracketCard({ standings, bracket }: { standings: StandingsResult; bracket: BracketResult }) {
   const seedOf = (id?: string) => (id ? standings.byTeam[id].conferenceSeed : undefined);
   const rounds = [['WC', 'Wild Card'], ['DIV', 'Divisional'], ['CONF', 'Championship']] as const;
   const sb = bracket.byId.SB;
   const champ = bracket.champion ? TEAM_BY_ID[bracket.champion] : undefined;
   return (
     <div className="flex h-full flex-col p-14" style={{ background: BG }}>
-      <Header owner={owner} eyebrow="playoff bracket" title={champ ? `${champ.name} win it all` : 'Playoff bracket'} season={season} />
+      <Header eyebrow="Predictions" title={champ ? `${champ.name} win it all` : 'Playoff bracket'} />
       <div className="mt-8 flex shrink-0 gap-8">
         {(['AFC', 'NFC'] as const).map((c) => (
           <div key={c} className="flex-1">
@@ -318,7 +350,7 @@ function BracketCard({ owner, standings, bracket, season }: { owner: string; sta
               <Trophy />
               <span className="text-4xl leading-tight font-black">{champ.city} {champ.name}</span>
             </>
-          ) : <span className="text-4xl text-white/40">Champion TBD</span>}
+          ) : <span className="text-4xl whitespace-nowrap text-white/40">Champion TBD</span>}
         </div>
       </div>
       <Footer />
@@ -328,19 +360,20 @@ function BracketCard({ owner, standings, bracket, season }: { owner: string; sta
 
 /** Fixed 1080×1350 (4:5) social graphic, rendered off-screen and captured with html-to-image. */
 export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(props, ref) {
-  const { variant, selection, standings, bracket, season, games, outcomes, name } = props;
-  const owner = ownerLabel(name);
+  const { variant, selection, standings, bracket, games, outcomes, name, divisionScope = 'remaining' } = props;
   return (
     <div ref={ref} style={{ width: 1080, height: 1350, fontFamily: FONT }} className="overflow-hidden text-white">
-      {variant === 'week' && selection.kind === 'week' ? (
-        <WeekCard owner={owner} week={selection.week} season={season} games={games} outcomes={outcomes} />
-      ) : variant === 'team' && selection.kind === 'team' ? (
-        <TeamCard owner={owner} teamId={selection.teamId} standings={standings} season={season} games={games} outcomes={outcomes} />
-      ) : variant === 'bracket' ? (
-        <BracketCard owner={owner} standings={standings} bracket={bracket} season={season} />
-      ) : (
-        <StandingsCard owner={owner} selection={selection} standings={standings} season={season} games={games} outcomes={outcomes} />
-      )}
+      <NameContext.Provider value={(name ?? '').trim().slice(0, MAX_NAME_LENGTH)}>
+        {variant === 'week' && selection.kind === 'week' ? (
+          <WeekCard week={selection.week} games={games} outcomes={outcomes} />
+        ) : variant === 'team' && selection.kind === 'team' ? (
+          <TeamCard teamId={selection.teamId} standings={standings} games={games} outcomes={outcomes} />
+        ) : variant === 'bracket' ? (
+          <BracketCard standings={standings} bracket={bracket} />
+        ) : (
+          <StandingsCard selection={selection} standings={standings} games={games} outcomes={outcomes} scope={divisionScope} />
+        )}
+      </NameContext.Provider>
     </div>
   );
 });

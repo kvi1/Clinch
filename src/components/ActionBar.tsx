@@ -26,6 +26,8 @@ export function ActionBar({ variant }: { variant: ShareVariant }) {
   const selection = useStore((s) => s.selection);
   const outcomes = useStore((s) => s.outcomes);
   const displayName = useStore((s) => s.displayName);
+  const divisionScope = useStore((s) => s.divisionCardScope);
+  const setDivisionScope = useStore((s) => s.setDivisionCardScope);
   const standings = useStandings()!;
   const bracket = useBracket()!;
   const query = useShareQuery();
@@ -69,8 +71,26 @@ export function ActionBar({ variant }: { variant: ShareVariant }) {
   };
 
   const cardProps = {
-    variant, selection, standings, bracket, season: season.season, games: season.games, outcomes, name: displayName,
+    variant, selection, standings, bracket, games: season.games, outcomes, name: displayName, divisionScope,
   };
+  const options = variant === 'standings' && (
+    <div className="mb-4">
+      <div className="mb-1.5 text-xs font-semibold tracking-wider text-gray-400 uppercase">Show</div>
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Games to show">
+        {([['remaining', 'Remaining games'], ['season', 'Full season']] as const).map(([value, label]) => {
+          const active = divisionScope === value;
+          return (
+            <button key={value} type="button" role="radio" aria-checked={active} onClick={() => setDivisionScope(value)}
+              className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors ${
+                active ? 'border-emerald-400 bg-emerald-400/10 text-emerald-200' : 'border-white/10 bg-white/[0.03] text-gray-300 hover:border-white/25'
+              }`}>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
   const btn = 'flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-semibold whitespace-nowrap transition-colors';
   const onBracket = variant === 'bracket';
   return (
@@ -79,7 +99,7 @@ export function ActionBar({ variant }: { variant: ShareVariant }) {
         <ShareCard ref={cardRef} {...cardProps} />
       </div>
       <ExportDialog open={dialogOpen} busy={busy} title={DIALOG_TITLE[variant]} onClose={closeDialog} onExport={doExport}
-        preview={<ShareCard {...cardProps} />} />
+        preview={<ShareCard {...cardProps} />} options={options} />
       {toast && (
         <div role="status" className="fixed inset-x-0 bottom-24 z-40 mx-auto w-fit rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-xl">
           {toast}
