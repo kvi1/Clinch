@@ -121,6 +121,11 @@ export default function App() {
           Unofficial fan tool · not affiliated with the NFL · team names and colors used for identification only.
           Made by Kartik
           {season && <> · data updated {new Date(season.updatedAt).toLocaleString()}</>}
+          <div className="mt-1">
+            Schedule &amp; scores from{' '}
+            <a href="https://github.com/nflverse/nflverse-data" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-400">nflverse</a>
+            {' '}(<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-400">CC BY 4.0</a>)
+          </div>
         </footer>
       </div>
     </BrowserRouter>

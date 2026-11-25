@@ -1,57 +1,105 @@
 /**
- * Fetches the NFL regular-season schedule + results from ESPN's public scoreboard JSON
- * and writes public/data/nfl-<season>.json.
+ * Builds public/data/nfl-<season>.json from the nflverse schedules release
+ * (https://github.com/nflverse/nflverse-data, licensed CC BY 4.0 — credit "nflverse").
  *
  * Usage: npm run fetch-schedule [-- --season 2026] [--out path.json]
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import type { Game, GameOutcome, SeasonData } from '../src/types/nfl';
 import { TEAMS, TEAM_IDS } from '../src/data/teams';
 
-const ESPN_ABBR: Record<string, string> = { WSH: 'WAS', JAC: 'JAX', LA: 'LAR' };
-const normalize = (abbr: string) => ESPN_ABBR[abbr] ?? abbr;
+export const SOURCE_URL = 'https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv.gz';
 
-/* Minimal shape of the ESPN response fields we read. */
-interface EspnCompetitor { homeAway: 'home' | 'away'; score?: string; team: { abbreviation: string } }
-interface EspnEvent {
-  date: string;
-  status: { type: { completed: boolean; name: string } };
-  competitions: { competitors: EspnCompetitor[]; odds?: { spread?: number }[]; timeValid?: boolean }[];
+/** nflverse abbreviations that differ from ours. */
+const NFLVERSE_ABBR: Record<string, string> = { LA: 'LAR' };
+const normalize = (abbr: string) => NFLVERSE_ABBR[abbr] ?? abbr;
+
+/** Minimal RFC 4180 CSV parser (quoted fields, escaped quotes, CRLF). Returns rows as header-keyed objects. */
+export function parseCsv(text: string): Record<string, string>[] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); field = '';
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      row = [];
+    } else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  const [header, ...body] = rows;
+  return body.map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] ?? ''])));
 }
 
-export function mapEvent(ev: EspnEvent, season: number, week: number): Game {
-  const comp = ev.competitions[0];
-  const home = comp.competitors.find((c) => c.homeAway === 'home')!;
-  const away = comp.competitors.find((c) => c.homeAway === 'away')!;
-  const homeTeamId = normalize(home.team.abbreviation);
-  const awayTeamId = normalize(away.team.abbreviation);
-  const isFinal = ev.status.type.completed;
+/** nflverse kickoff = local US Eastern date + "HH:MM". Convert to a UTC ISO string (DST-aware). */
+export function easternToIso(date: string, time: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  const [hh, mm] = (time || '13:00').split(':').map(Number);
+  const asUtc = Date.UTC(y, m - 1, d, hh, mm);
+  const offset = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'longOffset' })
+    .formatToParts(new Date(asUtc + 5 * 3600_000))
+    .find((p) => p.type === 'timeZoneName')!.value; // e.g. "GMT-05:00"
+  const match = /GMT([+-])(\d{2}):(\d{2})/.exec(offset);
+  const minutes = match ? (match[1] === '-' ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3])) : 0;
+  return new Date(asUtc - minutes * 60_000).toISOString();
+}
+
+export function mapRow(r: Record<string, string>): Game {
+  const season = Number(r.season);
+  const week = Number(r.week);
+  const homeTeamId = normalize(r.home_team);
+  const awayTeamId = normalize(r.away_team);
+  const isFinal = r.home_score !== '' && r.away_score !== '';
   const game: Game = {
+    // Same id scheme as before the data-source switch — share links depend on it.
     id: `${season}_W${week}_${awayTeamId}_${homeTeamId}`,
     week,
-    kickoffIso: new Date(ev.date).toISOString(),
+    kickoffIso: easternToIso(r.gameday, r.gametime),
     homeTeamId,
     awayTeamId,
     isFinal,
     actualOutcome: 'UNPLAYED',
   };
   if (isFinal) {
-    const hs = Number(home.score);
-    const as = Number(away.score);
+    const hs = Number(r.home_score);
+    const as = Number(r.away_score);
     game.homeScore = hs;
     game.awayScore = as;
     game.actualOutcome = (hs > as ? 'HOME_WIN' : hs < as ? 'AWAY_WIN' : 'TIE') satisfies GameOutcome;
+  } else if (r.spread_line !== '' && !Number.isNaN(Number(r.spread_line))) {
+    // nflverse: positive spread_line = home favored. Ours: negative = home favored.
+    const line = Number(r.spread_line);
+    game.vegasSpread = line === 0 ? 0 : -line;
   }
-  const spread = comp.odds?.[0]?.spread;
-  if (!isFinal && typeof spread === 'number') game.vegasSpread = spread;
-  if (!isFinal && comp.timeValid === false) game.timeTbd = true;
   return game;
 }
 
 /**
- * ESPN intermittently omits odds. For games still to be played, keep the last known spread
+ * nflverse has no "time not set" flag; unscheduled games (e.g. week 18 before flexing) all carry the
+ * same placeholder kickoff. If every remaining game in a week shares one kickoff, mark them TBD.
+ */
+export function markTbdWeeks(games: Game[]): void {
+  const byWeek = new Map<number, Game[]>();
+  for (const g of games) if (!g.isFinal) byWeek.set(g.week, [...(byWeek.get(g.week) ?? []), g]);
+  for (const open of byWeek.values()) {
+    if (open.length >= 8 && new Set(open.map((g) => g.kickoffIso)).size === 1) for (const g of open) g.timeTbd = true;
+  }
+}
+
+/**
+ * The feed can omit a line for a while. For games still to be played, keep the last known spread
  * instead of dropping it (mutates `next`). Finals never carry a spread.
  */
 export function carryForwardSpreads(prev: Game[], next: Game[]): void {
@@ -80,16 +128,21 @@ export function validate(games: Game[]): string[] {
   return errors;
 }
 
-async function fetchWeek(season: number, week: number): Promise<EspnEvent[]> {
-  const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${season}&seasontype=2&week=${week}`;
+export function buildSeason(rows: Record<string, string>[], season: number): Game[] {
+  const games = rows.filter((r) => Number(r.season) === season && r.game_type === 'REG').map(mapRow);
+  markTbdWeeks(games);
+  games.sort((a, b) => a.week - b.week || a.kickoffIso.localeCompare(b.kickoffIso) || a.id.localeCompare(b.id));
+  return games;
+}
+
+async function download(): Promise<string> {
   for (let attempt = 1; ; attempt++) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(SOURCE_URL);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const body = (await res.json()) as { events?: EspnEvent[] };
-      return body.events ?? [];
+      return gunzipSync(Buffer.from(await res.arrayBuffer())).toString('utf8');
     } catch (err) {
-      if (attempt >= 3) throw new Error(`week ${week}: ${(err as Error).message}`);
+      if (attempt >= 3) throw new Error(`download failed: ${(err as Error).message}`);
       await new Promise((r) => setTimeout(r, 2000 * attempt));
     }
   }
@@ -98,14 +151,7 @@ async function fetchWeek(season: number, week: number): Promise<EspnEvent[]> {
 async function main() {
   const idx = process.argv.indexOf('--season');
   const season = idx > 0 ? Number(process.argv[idx + 1]) : 2026;
-  // Sequential with a small delay: ESPN rate-limits bursts of parallel requests.
-  const weeks: EspnEvent[][] = [];
-  for (let week = 1; week <= 18; week++) {
-    weeks.push(await fetchWeek(season, week));
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  const games = weeks.flatMap((events, i) => events.map((ev) => mapEvent(ev, season, i + 1)));
-  games.sort((a, b) => a.week - b.week || a.kickoffIso.localeCompare(b.kickoffIso) || a.id.localeCompare(b.id));
+  const games = buildSeason(parseCsv(await download()), season);
 
   const errors = validate(games);
   if (errors.length) {

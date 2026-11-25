@@ -13,7 +13,7 @@ npm install
 npm run dev            # http://localhost:5173
 npm test               # engine, bracket, URL-state and data-script tests
 npm run build          # type-check + production build to dist/
-npm run fetch-schedule # refresh public/data/nfl-2026.json from ESPN
+npm run fetch-schedule # refresh public/data/nfl-2026.json from nflverse
 ```
 
 ## Pages
@@ -30,7 +30,13 @@ npm run fetch-schedule # refresh public/data/nfl-2026.json from ESPN
   `standings.ts` (division ranks, seeds 1–16), `bracket.ts` (reseeding, pick invalidation).
   Validated against the official 2023 and 2024 seeds (`__fixtures__/`).
 - `src/state/` — Zustand store, lz-string URL encoding (`?s=`).
-- `scripts/fetch-schedule.ts` — ESPN scoreboard → season JSON, validated (272 games, 17 per team).
+- `scripts/fetch-schedule.ts` — nflverse schedules release (`games.csv.gz`) → season JSON, validated (272 games, 17 per team).
+
+## Data & attribution
+
+Schedule, scores and betting lines come from the [nflverse](https://github.com/nflverse/nflverse-data) `schedules` release,
+licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The license requires credit, which the site footer provides —
+keep it if you change the footer. nflverse updates every ~10–30 minutes; the GitHub Action polls every 30 minutes on game days.
 
 ## Deploy (Vercel)
 
