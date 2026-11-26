@@ -260,13 +260,13 @@ function WeekCard({ week, games, outcomes }: { week: number; games: Game[]; outc
       <div className="mt-3 shrink-0 text-2xl text-white/55">
         {weekDateRange(slate)} · {picked}/{open.length} picked{finals ? ` · ${finals} already final` : ''}
       </div>
-      <div className="mt-6 flex shrink-0 gap-6">
+      <div className="mt-6 flex shrink-0 gap-10">
         {columns.map((col, ci) => (
-          <div key={ci} className="flex flex-1 flex-col gap-2.5">
+          <div key={ci} className={`flex flex-1 flex-col ${compact ? 'gap-7' : 'gap-9'}`}>
             {col.map((g) => {
               const tie = (g.isFinal ? g.actualOutcome : outcomes[g.id]) === 'TIE';
               return (
-                <div key={g.id} className="relative overflow-hidden rounded-xl bg-white/[0.06] ring-1 ring-white/10">
+                <div key={g.id} className="relative overflow-hidden rounded-xl bg-white/[0.06] ring-1 ring-white/20">
                   {side(g, g.awayTeamId, g.awayScore, false)}
                   <div className="h-px bg-white/[0.07]" />
                   {side(g, g.homeTeamId, g.homeScore, true)}
